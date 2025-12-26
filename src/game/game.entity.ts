@@ -1,3 +1,4 @@
+import { Player } from 'src/player/player.entity';
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, Unique } from 'typeorm';
 
 export enum GameStatus {
@@ -27,4 +28,8 @@ export class Game {
   startedAt: Date;
   @Column({ type: 'timestamp', nullable: true })
   finishedAt: Date;
+
+
+    @OneToMany(() => Player, player => player.game)
+    players: Player[];
 }

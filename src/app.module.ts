@@ -5,6 +5,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Game } from './game/game.entity';
 import { GameModule } from './game/game.module';
+import { Player } from './player/player.entity';
+import { PlayerModule } from './player/player.module';
 
 @Module({
   imports: [
@@ -19,11 +21,13 @@ import { GameModule } from './game/game.module';
         username: config.get<string>('DB_USERNAME'),
         password: config.get<string>('DB_PASSWORD'),
         database: config.get<string>('DB_DATABASE'),
-        entities: [Game],
+        entities: [Game,Player],
         synchronize: true,
       }),
     }),
     GameModule,
+    PlayerModule,
+    
   ],
   controllers: [AppController],
   providers: [AppService],
