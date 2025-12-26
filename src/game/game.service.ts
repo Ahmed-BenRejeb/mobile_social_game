@@ -3,12 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { Game, GameStatus } from './game.entity';
 import { CreateGameDto } from './dto/create-game.dto';
+import { Player } from 'src/player/player.entity';
 
 @Injectable()
 export class GameService {
   constructor(
     @InjectRepository(Game)
     private gameRepository: Repository<Game>,
+    @InjectRepository(Player)
+private playerRepository: Repository<Player>,
+
   ) {}
 
   async createGame() {
@@ -51,21 +55,44 @@ export class GameService {
     throw new BadRequestException('Game already started');
   }
 
-  game.status = GameStatus.RUNNING;
-  game.startedAt = new Date();
-  return this.gameRepository.save(game);
-}
+ 
+
+  
+    const players = await this.playerRepository.find({
+      where: { game: { id: game.id }, isAlive: true },
+    });
+    if (players.length < 4) throw new BadRequestException('Not enough players');
+    
+    const shuffled = players.sort(() => Math.random() - 0.5);
+    for (let i = 0; i < shuffled.length; i++) {
+      shuffled[i].currentTarget = shuffled[(i + 1) % shuffled.length];
+    }
+    await this.playerRepository.save(shuffled);
+     game.status = GameStatus.RUNNING;
+    game.startedAt = new Date();
+    await this.gameRepository.save(game);
+    return game;
+  }
 
     async finishGame(id: number) {
     const game = await this.getGameOrFail(id);
-
+    
     if (game.status !== GameStatus.RUNNING) {
         throw new BadRequestException('Game is not running');
     }
+    const alivePlayers = await this.playerRepository.find({
+  where: { game: { id: game.id }, isAlive: true },
+});
 
-    game.status = GameStatus.FINISHED;
-    game.finishedAt = new Date();
-    return this.gameRepository.save(game);
+    if (alivePlayers.length == 1) {
+        const game = await this.getGameOrFail(id);
+        const winner = alivePlayers[0];
+        game.status = GameStatus.FINISHED;
+        game.finishedAt = new Date();
+        await this.gameRepository.save(game);
+        return { game, winner };
+    }
+
     }
     private async getGameOrFail(id: number): Promise<Game> {
     const game = await this.gameRepository.findOne({ where: { id } });
@@ -83,15 +110,34 @@ export class GameService {
         const game = await this.getGameById(id);
         return this.gameRepository.remove(game);    
     }
+    async getGameResult(gameId: number) {
+    const game = await this.getGameOrFail(gameId);
+    if (!game)  {
+        throw new NotFoundException('Game not found');
+    }
+    if (game.status !== GameStatus.FINISHED) {
+        throw new BadRequestException('Game is not finished yet');
+    }
+
+    return this.gameRepository.findOne({
+        where: { id: gameId },
+        relations: ['winner'],
+    });
+    }
+    async deleteAllGames() {
+        const games = await this.gameRepository.find({ select: ['id'] });
+        if (games.length > 0) {
+            const ids = games.map(g => g.id);
+            await this.gameRepository.delete(ids);
+        }
+        return { message: 'All games deleted' };
+  }
 
 
-
-
-
-    
     private generateGameCode(): string {
     const result = Math.floor(100000 + Math.random() * 900000).toString();
     return result;
 }
+
 }
 

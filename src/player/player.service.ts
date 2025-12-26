@@ -14,11 +14,19 @@ export class PlayerService {
     private gameRepository: Repository<Game>,
   ) {}
 
-  async getPlayers(): Promise<Player[]> {
-    return this.playerRepository.find();
+  async getPlayers(gameId: number): Promise<Player[]> {
+    const game = await this.gameRepository.findOne({ where: { id: gameId } });
+    if (!game) {
+      throw new NotFoundException('Game not found');
+    }
+    return this.playerRepository.find({
+    where: {game: {id:gameId}},
+    relations: ['game', 'currentTarget'],
+  });
   }
 
-  async joinGame(gameId: number, nickname: string) {
+  async joinGame(gameId: number, nickname: string) 
+  {
   const game = await this.gameRepository.findOne({ where: { id: gameId } });
   if (!game) throw new NotFoundException('Game not found');
   if (game.status !== GameStatus.WAITING)
@@ -65,7 +73,7 @@ async assignInitialTargets(gameId: number) {
 async killTarget(killerId: number, targetCode: string) {
   const killer = await this.playerRepository.findOne({
     where: { id: killerId },
-    relations: ['currentTarget', 'currentTarget.currentTarget'],
+    relations: ['game', 'currentTarget', 'currentTarget.currentTarget'],
   });
 
   if (!killer) throw new NotFoundException('Player not found');
@@ -97,6 +105,21 @@ async killTarget(killerId: number, targetCode: string) {
 
   // Update other affected players
   await this.reassignTargetsForDead(target.id);
+  const alivePlayers = await this.playerRepository.count({
+  where: { game: { id: killer.game.id }, isAlive: true },
+});
+
+  if (alivePlayers === 1) {
+  const game = killer.game;
+  game.status = GameStatus.FINISHED;
+  game.finishedAt = new Date();
+  await this.gameRepository.save(game);
+
+  return {
+    message: 'Game finished',
+    winner: killer,
+  };
+}
 }
 
 
@@ -111,7 +134,7 @@ async reassignTargetsForDead(deadPlayerId: number) {
     let newTarget = player.currentTarget.currentTarget;
 
     // Skip dead targets recursively
-    while (newTarget && !newTarget.isAlive) {
+    while (newTarget && !newTarget.isAlive || newTarget?.secretCode===player.secretCode) {
       newTarget = newTarget.currentTarget;
     }
 
@@ -120,7 +143,37 @@ async reassignTargetsForDead(deadPlayerId: number) {
 
   await this.playerRepository.save(affectedPlayers);
 }
+async createStandalonePlayer(nickname: string) {
+    const player = this.playerRepository.create({
+      nickname,
+      isAlive: true,
+      secretCode: Math.floor(100000 + Math.random() * 900000).toString(),
+      // No game, no target
+    });
+    return this.playerRepository.save(player);
+  }
 
+
+  async deletePlayer(gameId: number, id: number) {
+    const player = await this.playerRepository.findOne({ where: { id, game: { id: gameId } } });
+    if (!player) {
+      throw new NotFoundException('Player not found');
+    }
+    return this.playerRepository.remove(player);
+  }
+  async deleteAllPlayers(gameId: number) {
+       const players = await this.playerRepository.find({ where: { game: { id: gameId } }, select: ['id'] });
+        if (players.length > 0) {
+            const ids = players.map(p => p.id);
+            await this.playerRepository.delete(ids);
+        }
+        return { message: 'All players deleted' };
+  }
+  async getAllPlayers(): Promise<Player[]> {
+    return this.playerRepository.find({
+    relations: ['game', 'currentTarget'],
+  });
+  }
 
 
 

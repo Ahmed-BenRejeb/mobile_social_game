@@ -27,4 +27,7 @@ currentTarget: Player | null;
   
   @Column({ default: 0 })
   kills: number;
+
+
+  
 }

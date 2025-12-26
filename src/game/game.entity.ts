@@ -1,5 +1,5 @@
 import { Player } from 'src/player/player.entity';
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, Unique } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, Unique, ManyToOne } from 'typeorm';
 
 export enum GameStatus {
   WAITING = 'WAITING',
@@ -32,4 +32,6 @@ export class Game {
 
     @OneToMany(() => Player, player => player.game)
     players: Player[];
+    @ManyToOne(() => Player, { nullable: true })
+winner: Player | null;
 }

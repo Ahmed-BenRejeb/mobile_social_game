@@ -33,10 +33,22 @@ finishGame(@Param('id', ParseIntPipe) id: number) {
 }
 
 
-
     @Delete(':id')
     @ApiParam({ name: 'id', type: Number })
     deleteGame(@Param('id', ParseIntPipe) id: number) {
         return this.gameService.deleteGame(id);
     }
+
+
+
+@Get(':id/result')
+getGameResult(@Param('id', ParseIntPipe) id: number) {
+  return this.gameService.getGameResult(id);
+}
+@Delete('')
+deleteAllGames() {
+  return this.gameService.deleteAllGames();
+}
+
+
 }
