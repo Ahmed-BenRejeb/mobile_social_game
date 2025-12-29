@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post } from '@nestjs/common';
-import { ApiBody, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { PlayerService } from './player.service';
 import { CreatePlayerDto } from './dto/create-player.dto';
 
@@ -9,17 +9,20 @@ export class GlobalPlayerController {
     constructor(private readonly playerService: PlayerService) {}
 
     @Get()
+    @ApiOperation({ summary: 'Get all players' })
     getAllPlayers() {
         return this.playerService.getAllPlayers();
     }
 
     @Post()
+    @ApiOperation({ summary: 'Create a standalone player' })
     @ApiBody({ type: CreatePlayerDto })
     createPlayer(@Body() dto: CreatePlayerDto) {
         return this.playerService.createStandalonePlayer(dto.nickname);
     }
 
     @Patch(':playerId/nickname')
+    @ApiOperation({ summary: 'Change standalone player nickname' })
     @ApiParam({ name: 'playerId', type: Number, example: 5 })
     @ApiBody({ schema: { properties: { newNickname: { type: 'string', example: 'NewNick' } } } })
     changeNickname(
