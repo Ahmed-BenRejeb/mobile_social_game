@@ -40,6 +40,6 @@ jobs:
           sed -i "s|image: .*social-backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/social-backend:${{ github.sha }}|g" deployement/backend-deployment.yaml
 
           # 3. Commit and Push the change back to the repo
-          git add deployement/backend-deployment.yaml
+          git add deployement/backend.yml
           git commit -m "Update image tag to ${{ github.sha }}"
           git push
