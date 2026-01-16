@@ -5,8 +5,8 @@ export const options = {
   // Key configuration: Scale up to 1000 users over 1 minute
   stages: [
     { duration: '30s', target: 500 },  // Warm up
-    { duration: '1m', target: 5000 }, // Ramp to 500 users
-    { duration: '1m', target: 10000 }, // Ramp to 1000 users
+    { duration: '1m', target: 500 }, // Ramp to 500 users
+    { duration: '1m', target: 1000 }, // Ramp to 1000 users
   ],
 };
 
@@ -15,5 +15,6 @@ export default function () {
   http.get('http://192.168.49.2:30002/chaos/db-stress');
 
   // Real users don't click instantly. They wait 1s.
+  sleep(1);
 
 }
