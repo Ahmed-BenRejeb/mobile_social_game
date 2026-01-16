@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: ahmedbenrejeb0/backend:83656dd6c50249a59d8c9d13c42db186fc946ded
+          image: ahmedbenrejeb0/backend:a90d0b2ffb7761467358c2b24e11e8299dfedb44
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
