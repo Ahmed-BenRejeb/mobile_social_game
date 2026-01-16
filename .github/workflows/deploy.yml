@@ -37,7 +37,7 @@ jobs:
 
           # 2. Edit the deployment file using 'sed'
           # This replaces the image tag with the new commit hash
-          sed -i "s|image: .*social-backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/social-backend:${{ github.sha }}|g" deployement/backend-deployment.yaml
+          sed -i "s|image: .*social-backend:.*|image: ${{ secrets.DOCKER_USERNAME }}/social-backend:${{ github.sha }}|g" deployement/backend.yml
 
           # 3. Commit and Push the change back to the repo
           git add deployement/backend.yml
