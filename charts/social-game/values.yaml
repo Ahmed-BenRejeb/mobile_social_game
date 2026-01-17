@@ -1,6 +1,6 @@
 # charts/social-game/values.yaml
 
-replicaCount: 1
+replicaCount: 3
 
 image:
   repository: ahmedbenrejeb0/backend
