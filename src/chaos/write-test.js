@@ -4,8 +4,7 @@ import { check, sleep } from 'k6';
 export const options = {
   // We will ramp up faster to force a crash
   stages: [
-    { duration: '30s', target: 100 },  // Warm up with 100 users
-    { duration: '1m', target: 500 },   // Push to 500
+    { duration: '30s', target: 500 },   // Warm up
     { duration: '1m', target: 1000 },  // Push to 1000 (MySQL usually breaks here)
   ],
 };
@@ -30,7 +29,11 @@ export default function () {
   check(res, {
     'is status 201': (r) => r.status === 201,
   });
-
+if (res.status !== 201) {
+    console.log(`Failed: ${res.status} - ${res.body}`);
+  }
   // Short sleep to simulate real traffic
   sleep(1);
+
+  
 }
