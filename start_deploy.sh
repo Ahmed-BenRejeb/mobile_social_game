@@ -16,7 +16,7 @@ ubectl wait --for=condition=ready pod --all -n argocd --timeout=300s
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n monitoring --timeout=300s
 
 argocd_pwd=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo) 
-grafana_pwd=$(kubectl get secret --namespace monitoring monitoring-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode)
+grafana_pwd=$(kubectl get secret --namespace monitoring monitoring-grafana -o jsonpath="{.data.admin-password}" | base64 --decode; echo)
 echo "ArgoCD initial admin password: $argocd_pwd"
 echo "Grafana admin password: $grafana_pwd"
 
