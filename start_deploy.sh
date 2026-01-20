@@ -10,8 +10,7 @@ kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/st
 
 kubectl create namespace monitoring
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm install monitoring-stack prometheus-community/kube-prometheus-stack -n monitoring 
-k
+
 ubectl wait --for=condition=ready pod --all -n argocd --timeout=300s
 
 kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n monitoring --timeout=300s
@@ -23,7 +22,7 @@ echo "Grafana admin password: $grafana_pwd"
 
 
 nohup kubectl port-forward svc/argocd-server -n argocd 8080:443 &
-nohup kubectl port-forward svc/monitoring-stack-grafana -n monitoring 3000:80
+nohup kubectl port-forward svc/monitoring-grafana -n monitoring 3000:80
 
 minikube ip 
 minikube dashboard
