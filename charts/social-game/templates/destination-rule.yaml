@@ -15,8 +15,8 @@ spec:
       tcp:
         maxConnections: 100        # Don't let more than 100 TCP connections open
       http:
-        http1MaxPendingRequests: 200 # Queue size: Only 10 people allowed in the waiting room
-        maxRequestsPerConnection: 40
+        http1MaxPendingRequests: 50 # Queue size: Only 10 people allowed in the waiting room
+        maxRequestsPerConnection: 20
     
     # 3. Outlier Detection (The "Ejector Seat")
     outlierDetection:
