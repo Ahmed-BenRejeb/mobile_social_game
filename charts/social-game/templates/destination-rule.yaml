@@ -15,12 +15,12 @@ spec:
       tcp:
         maxConnections: 100        # Don't let more than 100 TCP connections open
       http:
-        http1MaxPendingRequests: 50 # Queue size: Only 10 people allowed in the waiting room
+        http1MaxPendingRequests: 50 # Queue size: Only 50 people allowed in the waiting room
         maxRequestsPerConnection: 40
     
     # 3. Outlier Detection (The "Ejector Seat")
     outlierDetection:
-      consecutive5xxErrors: 10      # If a pod fails 5 times in a row...
+      consecutive5xxErrors: 10      # If a pod fails 10 times in a row...
       interval: 10s                # ...check every 10s...
       baseEjectionTime: 30s        # ...and kick it out of the pool for 30s.
       maxEjectionPercent: 100      # You can kick ALL pods if they are all bad.
