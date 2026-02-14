@@ -2,7 +2,7 @@
 
 A production-ready **Real-Life Assassination Game API** with enterprise-grade infrastructure. This project has evolved from a standalone NestJS backend into a fully containerized, Kubernetes-native application with automated CI/CD, self-healing deployments, and comprehensive monitoring.
 
-**Tech Stack**: NestJS | TypeORM | WebSockets | Redis | MySQL | Kubernetes | Helm | ArgoCD | GitHub Actions | Prometheus | Grafana
+**Tech Stack**: NestJS | TypeORM | WebSockets | Redis | MySQL | Kubernetes | Helm | ArgoCD | GitHub Actions | Prometheus | Grafana | **Istio Service Mesh** | **mTLS**
 
 ---
 
@@ -14,6 +14,8 @@ A production-ready **Real-Life Assassination Game API** with enterprise-grade in
 ### The Infrastructure
 - **Local Development**: Docker Compose with hot-reload
 - **Orchestration**: Kubernetes (Minikube for dev, production-ready Helm charts)
+- **Service Mesh**: Istio with STRICT mTLS for zero-trust security
+- **Traffic Management**: Circuit breakers, retries, and intelligent load balancing (LEAST_CONN)
 - **GitOps**: ArgoCD with automated syncing and self-healing
 - **CI/CD**: GitHub Actions auto-builds Docker images and updates Helm values on every push
 - **Observability**: Prometheus + Grafana for metrics, Alertmanager for notifications
@@ -28,7 +30,8 @@ A production-ready **Real-Life Assassination Game API** with enterprise-grade in
 - [📈 Performance & Reliability](#-performance--reliability) - Chaos engineering metrics
 - [🏠 Local Development](#-local-development) - Docker Compose setup
 - [☸️ Kubernetes Deployment](#️-kubernetes-deployment) - Full k8s stack
-- [🔄 CI/CD Pipeline](#-cicd-pipeline) - GitHub Actions → DockerHub → ArgoCD
+- [� Istio Service Mesh](#-istio-service-mesh) - mTLS, traffic management & circuit breakers
+- [�🔄 CI/CD Pipeline](#-cicd-pipeline) - GitHub Actions → DockerHub → ArgoCD
 - [📊 Monitoring](#-monitoring) - Prometheus & Grafana dashboards
 - [🎮 Game API](#-game-api) - All endpoints
 - [🏗️ Architecture](#️-architecture) - System design
@@ -39,7 +42,7 @@ A production-ready **Real-Life Assassination Game API** with enterprise-grade in
 
 ### Prerequisites
 - **Local Dev**: Docker & Docker Compose, Node.js 22+
-- **Kubernetes**: Minikube, kubectl, Helm 3+
+- **Kubernetes**: Minikube, kubectl, Helm 3+, Istio CLI (`istioctl`)
 - **CI/CD**: GitHub account with Docker Hub credentials configured as secrets
 
 ### Option 1: Local Docker Compose (2 minutes)
@@ -297,40 +300,54 @@ SWAGGER_PASSWORD=admin123
 ### Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Kubernetes Cluster                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │          ArgoCD Namespace (GitOps)                   │  │
-│  │  - Watches GitHub repo for changes                   │  │
-│  │  - Auto-syncs Helm charts                            │  │
-│  │  - Self-healing enabled                              │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │      Default Namespace (Game Application)            │  │
-│  │  ┌────────────────────────────────────────────────┐  │  │
-│  │  │  Backend Deployment (3-5 replicas + HPA)      │  │  │
-│  │  │  - NestJS app with liveness/readiness probes  │  │  │
-│  │  │  - Service (ClusterIP)                         │  │  │
-│  │  │  - Ingress → killer-game.local                 │  │  │
-│  │  └────────────────────────────────────────────────┘  │  │
-│  │  ┌────────────────────────────────────────────────┐  │  │
-│  │  │  MySQL StatefulSet + Persistent Volume       │  │  │
-│  │  │  Redis Deployment + Persistent Volume         │  │  │
-│  │  └────────────────────────────────────────────────┘  │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                               │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │     Monitoring Namespace (Prometheus Stack)         │  │
-│  │  - Grafana (http://localhost:3000)                  │  │
-│  │  - Prometheus (metrics scraping)                    │  │
-│  │  - Alertmanager (email alerts)                      │  │
-│  │  - Node Exporter (cluster metrics)                  │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          Kubernetes Cluster                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                    Istio Service Mesh                                │    │
+│  │  ┌─────────────────────────────────────────────────────────────┐    │    │
+│  │  │  istio-system Namespace (Control Plane)                     │    │    │
+│  │  │  - istiod (Pilot, Citadel, Galley)                          │    │    │
+│  │  │  - Istio Ingress Gateway                                    │    │    │
+│  │  │  - Certificate Management (auto-rotation)                   │    │    │
+│  │  └─────────────────────────────────────────────────────────────┘    │    │
+│  │                                                                       │    │
+│  │  ┌─────────────────────────────────────────────────────────────┐    │    │
+│  │  │  Default Namespace (Game Application) - Sidecar Injected   │    │    │
+│  │  │                                                              │    │    │
+│  │  │  ┌────────────────────────────────────────────────────┐    │    │    │
+│  │  │  │  Backend Pods (3-6 replicas + HPA)                │    │    │    │
+│  │  │  │  ┌──────────────┐  ┌──────────────────────────┐   │    │    │    │
+│  │  │  │  │ NestJS App   │──│ Envoy Sidecar (mTLS)     │   │    │    │    │
+│  │  │  │  │              │  │ - Circuit Breaker        │   │    │    │    │
+│  │  │  │  │              │  │ - Retries (1 attempt)    │   │    │    │    │
+│  │  │  │  │              │  │ - LEAST_CONN LB          │   │    │    │    │
+│  │  │  │  └──────────────┘  └──────────────────────────┘   │    │    │    │
+│  │  │  └────────────────────────────────────────────────────┘    │    │    │
+│  │  │                           │ mTLS                            │    │    │
+│  │  │                           ▼                                 │    │    │
+│  │  │  ┌────────────────────────────────────────────────────┐    │    │    │
+│  │  │  │  MySQL + Redis (with Envoy sidecars)              │    │    │    │
+│  │  │  │  - All traffic encrypted via mTLS                 │    │    │    │
+│  │  │  │  - Connection pool: 100 TCP, 50 pending HTTP      │    │    │    │
+│  │  │  └────────────────────────────────────────────────────┘    │    │    │
+│  │  └─────────────────────────────────────────────────────────────┘    │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  ArgoCD Namespace (GitOps)                                          │    │
+│  │  - Watches GitHub repo for changes                                  │    │
+│  │  - Auto-syncs Helm charts                                           │    │
+│  │  - Self-healing enabled                                             │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  Monitoring Namespace (Prometheus Stack)                            │    │
+│  │  - Grafana, Prometheus, Alertmanager, Node Exporter                 │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Setup Steps
@@ -342,10 +359,17 @@ SWAGGER_PASSWORD=admin123
 brew install minikube    # macOS
 # or from https://minikube.sigs.k8s.io/docs/start/
 
+# Install Istio CLI
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-*
+export PATH=$PWD/bin:$PATH
+# Add to ~/.bashrc or ~/.zshrc for persistence
+
 # Verify installations
 minikube version
 kubectl version
 helm version
+istioctl version
 ```
 
 #### 2. Initialize Cluster
@@ -365,6 +389,27 @@ chmod +x start_deploy.sh
 5. Outputs admin passwords for ArgoCD and Grafana
 6. Port-forwards services to localhost
 7. Opens Minikube dashboard
+
+#### 2.1. Install Istio (After Minikube starts)
+
+```bash
+# Install Istio with demo profile (includes all components)
+istioctl install --set profile=demo -y
+
+# Enable automatic sidecar injection for default namespace
+kubectl label namespace default istio-injection=enabled
+
+# Verify Istio installation
+kubectl get pods -n istio-system
+istioctl analyze
+
+# Expected output: All pods Running, no issues found
+```
+
+**Istio Components Installed:**
+- `istiod` - Control plane (Pilot + Citadel + Galley)
+- `istio-ingressgateway` - Ingress traffic handling
+- `istio-egressgateway` - Egress traffic control
 
 #### 3. Configure Local DNS
 
@@ -480,7 +525,200 @@ After successful deployment:
 
 ---
 
-## 🔄 CI/CD Pipeline
+## � Istio Service Mesh
+
+This project implements a **zero-trust security model** using Istio service mesh with STRICT mTLS, intelligent traffic management, and automatic circuit breakers.
+
+### Why Istio?
+
+| Challenge | Istio Solution |
+|-----------|----------------|
+| Service-to-service security | STRICT mTLS encrypts all traffic automatically |
+| Unreliable network calls | Automatic retries with configurable policies |
+| Cascading failures | Circuit breakers isolate unhealthy pods |
+| Traffic spikes | Connection pooling prevents exhaustion |
+| Load distribution | LEAST_CONN algorithm for optimal routing |
+
+### mTLS Configuration (Zero-Trust)
+
+All service-to-service communication is encrypted using mutual TLS in **STRICT mode**:
+
+```yaml
+# charts/social-game/templates/mtls-strict.yaml
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default-strict
+  namespace: default
+spec:
+  mtls:
+    mode: STRICT  # Reject all plaintext traffic
+```
+
+**What this means:**
+- ✅ All traffic between pods is **automatically encrypted**
+- ✅ Certificates are **auto-rotated** by Istio (no manual management)
+- ✅ Plaintext traffic is **rejected** - zero exceptions
+- ✅ Each workload gets a unique identity certificate (SPIFFE)
+
+**Verify mTLS is working:**
+```bash
+# Check mTLS status for all services
+istioctl authn tls-check $(kubectl get pod -l app=backend -o jsonpath='{.items[0].metadata.name}')
+
+# Expected: All destinations show "STRICT" or "mTLS"
+```
+
+### Traffic Management
+
+#### Gateway Configuration
+
+External traffic enters through the Istio Ingress Gateway:
+
+```yaml
+# charts/social-game/templates/gateway.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: backend-gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+```
+
+#### VirtualService Routing
+
+Routes traffic with automatic retry policies:
+
+```yaml
+# charts/social-game/templates/virtual-service.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: backend-vs
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - backend-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: backend
+        port:
+          number: 3000
+    retries:
+      attempts: 1
+      perTryTimeout: 2s
+      retryOn: connect-failure
+```
+
+### Circuit Breaker & Load Balancing
+
+The DestinationRule configures advanced traffic policies:
+
+```yaml
+# charts/social-game/templates/destination-rule.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: backend-destination
+spec:
+  host: backend
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN          # Route to pod with fewest connections
+    connectionPool:
+      tcp:
+        maxConnections: 100       # Prevent connection exhaustion
+      http:
+        http1MaxPendingRequests: 50
+        maxRequestsPerConnection: 40
+    outlierDetection:
+      consecutive5xxErrors: 10    # Eject after 10 consecutive errors
+      interval: 10s               # Check every 10 seconds
+      baseEjectionTime: 30s       # Eject unhealthy pods for 30s
+      maxEjectionPercent: 100     # Allow ejecting all pods if needed
+```
+
+**Traffic Policy Breakdown:**
+
+| Feature | Setting | Purpose |
+|---------|---------|---------|
+| **Load Balancing** | `LEAST_CONN` | Routes traffic to pod with fewest active connections (optimal for variable request times) |
+| **TCP Pool** | `maxConnections: 100` | Prevents connection exhaustion under load |
+| **HTTP Pool** | `http1MaxPendingRequests: 50` | Queue limit for pending requests |
+| **Connection Recycling** | `maxRequestsPerConnection: 40` | Recycle connections after 40 requests |
+| **Circuit Breaker** | `consecutive5xxErrors: 10` | Eject pod after 10 consecutive 5xx errors |
+| **Recovery** | `baseEjectionTime: 30s` | Automatically re-add pods after 30s |
+
+### Sidecar Proxy Configuration
+
+The deployment is configured to wait for the Envoy sidecar before starting the application:
+
+```yaml
+# In deployment.yaml
+spec:
+  template:
+    metadata:
+      annotations:
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+```
+
+**Why this matters:**
+- Prevents race conditions during pod startup
+- Ensures network policies are active before app makes requests
+- Critical for reliable mTLS enforcement
+
+### Istio Commands Reference
+
+```bash
+# Analyze configuration for issues
+istioctl analyze
+
+# Check mTLS status
+istioctl authn tls-check <pod-name>
+
+# Verify sidecar injection
+kubectl get pods -n default -o jsonpath='{.items[*].spec.containers[*].name}' | tr ' ' '\n' | grep istio
+
+# View Envoy configuration
+istioctl proxy-config cluster <pod-name>
+
+# Debug traffic routing
+istioctl proxy-config routes <pod-name>
+
+# Check Istio component status
+istioctl proxy-status
+
+# View metrics (if Prometheus is configured)
+kubectl exec -it <pod-name> -c istio-proxy -- curl localhost:15000/stats
+```
+
+### Security Benefits Summary
+
+| Security Aspect | Implementation |
+|-----------------|----------------|
+| **Encryption** | mTLS STRICT mode - all traffic encrypted |
+| **Identity** | SPIFFE certificates for each workload |
+| **Authentication** | Mutual certificate verification |
+| **Authorization** | Can add AuthorizationPolicy for fine-grained control |
+| **Certificate Rotation** | Automatic (no manual intervention) |
+| **Zero-Trust** | No implicit trust between services |
+
+---
+
+## �🔄 CI/CD Pipeline
 
 ### GitHub Actions Workflow
 
@@ -657,17 +895,25 @@ socket.emit('respondToKill', { response: true/false })
 │   └── social-game/                    # Helm chart for backend
 │       ├── Chart.yaml
 │       ├── values.yaml                 # Deployment config (auto-updated by CI/CD)
+│       ├── certs/                      # TLS certificates
+│       │   ├── tls.crt                 # Certificate file
+│       │   └── tls.key                 # Private key
 │       └── templates/
-│           ├── deployment.yaml         # Backend deployment
-│           ├── service.yaml            # Service definition
-│           ├── ingress.yaml            # Ingress (killer-game.local)
+│           ├── deployment.yaml         # Backend deployment with Istio annotations
+│           ├── backend-service.yaml    # Service definition
+│           ├── ingress.yaml            # Kubernetes Ingress (killer-game.local)
 │           ├── config-map.yaml         # Redis/DB config
 │           ├── secret.yaml             # Database credentials (encrypted)
 │           ├── mysql.yaml              # MySQL StatefulSet
 │           ├── redis.yaml              # Redis deployment
-│           ├── backend-hpa.yaml        # Auto-scaler (3-5 replicas)
-│           ├── backend-service.yaml    # Service details
-│           └── tls-secret.yaml         # SSL certificates
+│           ├── backend-hpa.yaml        # Auto-scaler (3-6 replicas)
+│           ├── tls-secret.yaml         # TLS secret for certificates
+│           │
+│           │   # Istio Service Mesh Configuration
+│           ├── mtls-strict.yaml        # PeerAuthentication - STRICT mTLS
+│           ├── gateway.yaml            # Istio Gateway - traffic entry point
+│           ├── virtual-service.yaml    # VirtualService - routing & retries
+│           └── destination-rule.yaml   # DestinationRule - circuit breaker & LB
 │
 ├── monitoring/
 │   ├── Chart.yaml                      # Prometheus stack Helm chart
@@ -690,6 +936,10 @@ socket.emit('respondToKill', { response: true/false })
 │   │   ├── player.entity.ts
 │   │   └── player.module.ts
 │   │
+│   ├── chaos/                          # Chaos engineering tests
+│   │   ├── loadtest.js                 # k6 read load testing
+│   │   └── write-test.js               # k6 write load testing
+│   │
 │   ├── redis/                          # Redis caching module
 │   ├── main.ts                         # NestJS bootstrap
 │   └── app.module.ts                   # Root module
@@ -708,7 +958,12 @@ socket.emit('respondToKill', { response: true/false })
 |------|---------|
 | `charts/social-game/values.yaml` | Backend deployment config (auto-updated by CI/CD) |
 | `charts/social-game/templates/deployment.yaml` | Kubernetes deployment spec with probes & resources |
-| `charts/social-game/templates/backend-hpa.yaml` | Auto-scaler rules (3-5 replicas, 50% CPU target) |
+| `charts/social-game/templates/backend-hpa.yaml` | Auto-scaler rules (3-6 replicas, 70% CPU target) |
+| `charts/social-game/templates/mtls-strict.yaml` | **Istio** PeerAuthentication - STRICT mTLS enforcement |
+| `charts/social-game/templates/gateway.yaml` | **Istio** Gateway - External traffic entry point |
+| `charts/social-game/templates/virtual-service.yaml` | **Istio** VirtualService - Routing rules & retries |
+| `charts/social-game/templates/destination-rule.yaml` | **Istio** DestinationRule - Circuit breaker & load balancing |
+| `charts/social-game/certs/` | TLS certificates for secure communication |
 | `monitoring/values.yaml` | Grafana dashboards & Alertmanager rules |
 | `.github/workflows/deploy.yml` | CI/CD: build → push → update Helm values |
 | `docker-compose.yml` | Local dev: MySQL, Redis, backend with hot-reload |
@@ -717,6 +972,35 @@ socket.emit('respondToKill', { response: true/false })
 ---
 
 ## 🔧 Troubleshooting
+
+### Istio Issues
+
+```bash
+# Analyze Istio configuration for errors
+istioctl analyze
+
+# Check if sidecar is injected into pods
+kubectl get pods -n default -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].name}{"\n"}{end}'
+# Should see "istio-proxy" container in each pod
+
+# Verify mTLS is active
+istioctl authn tls-check $(kubectl get pod -l app=backend -o jsonpath='{.items[0].metadata.name}') backend.default.svc.cluster.local
+
+# Check proxy configuration
+istioctl proxy-status
+
+# Debug Envoy logs
+kubectl logs <pod-name> -c istio-proxy --tail=50
+
+# Restart sidecar if needed
+kubectl delete pod <pod-name>  # New pod will get fresh sidecar
+```
+
+**Common Istio Issues:**
+- **Sidecar not injected**: Ensure namespace has label `istio-injection=enabled`
+- **mTLS failures**: Check PeerAuthentication and DestinationRule match
+- **503 errors**: Circuit breaker may be tripping - check outlierDetection settings
+- **Connection refused**: Ensure `holdApplicationUntilProxyStarts` is set
 
 ### ArgoCD Application Not Syncing
 
@@ -876,6 +1160,7 @@ kubectl set image deployment/backend backend=ahmedbenrejeb0/backend:latest -n de
 
 ## 🚀 Production Checklist
 
+### Infrastructure
 - [ ] Use external-dns for production domain
 - [ ] Enable TLS/SSL certificates (cert-manager)
 - [ ] Configure persistent storage for MySQL (cloud provider)
@@ -888,12 +1173,24 @@ kubectl set image deployment/backend backend=ahmedbenrejeb0/backend:latest -n de
 - [ ] Set up log aggregation (ELK/Loki)
 - [ ] Enable network policies
 
+### Istio / Service Mesh
+- [x] Enable STRICT mTLS for all services
+- [x] Configure circuit breakers (DestinationRule)
+- [x] Set up intelligent load balancing (LEAST_CONN)
+- [x] Configure automatic retries (VirtualService)
+- [x] Enable sidecar proxy wait (`holdApplicationUntilProxyStarts`)
+- [ ] Add AuthorizationPolicy for fine-grained access control
+- [ ] Configure Istio Gateway with TLS certificates for HTTPS
+- [ ] Set up rate limiting with Envoy filters
+- [ ] Enable egress traffic control
+
 ---
 
 ## 📖 Documentation Links
 
 - [NestJS Documentation](https://docs.nestjs.com)
 - [Kubernetes Official Docs](https://kubernetes.io/docs)
+- [Istio Documentation](https://istio.io/latest/docs/) - Service mesh, mTLS, traffic management
 - [ArgoCD Documentation](https://argo-cd.readthedocs.io)
 - [Helm Documentation](https://helm.sh/docs)
 - [Prometheus Documentation](https://prometheus.io/docs)
